@@ -1,10 +1,15 @@
 # multimodal-ops
 
-# multimodal-ops
-
 > CANN Multimodal-AI SIG — 算子层仓库
 
 多模态 AI 算子库，面向昇腾 NPU 提供高性能多模态融合算子实现。按算子功能族组织，覆盖从编码、融合、空间几何到扩散生成的完整算子栈。
+
+## 源码下载
+
+```bash
+git clone https://gitcode.com/cann/multimodal-ops.git
+cd multimodal-ops
+```
 
 ## 算子族
 
@@ -24,4 +29,30 @@ multimodal-ops/
 │   ├── fusion/             #   融合算子（Attention · Query · Feature）
 │   ├── geometry/           #   空间几何算子（投影 · 空间对齐）
 │   └── diffusion/          #   扩散生成算子（调度 · 条件 · 生成）
-├── common/                 # 公共工具代码（ut
+├── common/                 # 公共工具代码（utils、通用 helper）
+├── include/                # 公共头文件 / 接口定义
+├── examples/               # 算子调用示例
+├── docs/                   # 算子设计文档与 API 参考
+├── cmake/                  # CMake 构建脚本
+└── scripts/                # 辅助脚本（代码生成、格式检查等）
+```
+
+## 贡献指南
+
+欢迎参与贡献，请参阅 [CONTRIBUTING.md](CONTRIBUTING.md) 了解贡献流程与规范。
+
+## 安全声明
+
+请参阅 [SECURITY.md](SECURITY.md) 了解安全相关信息。
+
+## 许可证
+
+本项目采用 [CANN Open Software License Agreement Version 2.0](LICENSE) 许可证。
+
+## 所属 SIG
+
+本仓库隶属于 CANN 社区 [multimodal-ai SIG](https://gitcode.com/cann/community/blob/master/CANN/sigs/multimodal-ai/README.md)。
+
+## 问题反馈
+
+如有问题或建议，请通过 [Issue](../../issues) 提交反馈。
