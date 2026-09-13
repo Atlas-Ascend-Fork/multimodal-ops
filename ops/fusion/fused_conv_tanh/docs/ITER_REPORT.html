@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>FusedConvTanh 半融合算子报告</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:1100px;margin:0 auto;padding:20px;background:#f8f9fa;color:#333}
+h1{color:#1a5276;border-bottom:3px solid #27ae60;padding-bottom:10px}
+h2{color:#2c3e50;margin-top:30px;border-left:4px solid #27ae60;padding-left:12px}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:14px}
+th,td{border:1px solid #bdc3c7;padding:8px 12px;text-align:center}
+th{background:#2c3e50;color:#fff}
+tr:nth-child(even){background:#ecf0f1}
+.pass{color:#27ae60;font-weight:bold}
+.card{background:#fff;border-radius:8px;padding:15px;margin:10px 0;box-shadow:0 2px 4px rgba(0,0,0,.1)}
+.success{background:#d5f5e3;border-left:4px solid #27ae60;padding:15px;margin:15px 0;border-radius:6px}
+.flow{font-family:monospace;background:#fff;padding:15px;border:2px solid #27ae60;border-radius:6px;line-height:1.8}
+.bar{height:20px;background:#27ae60;border-radius:3px;display:inline-block;vertical-align:middle}
+</style>
+</head>
+<body>
+
+<h1>🎉 FusedConvTanh 半融合算子报告 —— 一轮迭代全部达标</h1>
+<p>
+<b>算子</b>：Conv2d + Tanh 融合 | <b>框架</b>：PyPTO Pro | <b>芯片</b>：Ascend 950 (dav-3510, 28 Cube + 56 Vector)<br>
+<b>Work</b>：<code>fused_conv_tanh_20260905_175720</code> | <b>迭代次数</b>：<b>1 轮</b>（首版即达标，零回退）<br>
+<b>融合方案</b>：半融合（K1 Cube conv + K2 Vector tanh，中间结果经 HBM 一次往返）
+</p>
+
+<div class="success">
+<b>最终结果</b>：overall_score = <b>90.8</b> | avg_speedup = <b>3.92x</b> | 精度 <b>24/24</b> 全过 | 性能 <b>24/24</b> 全部达标<br>
+<b>耗时</b>：stage1 分析 8min + stage2 首版 6.7h + stage4 编译 1min + stage5 精度 4min + stage6 性能 7min + stage9 验证 6min + stage10 报告 = <b>约 7.5 小时完成</b>
+</div>
+
+<h2>1. 融合方案</h2>
+
+<div class="card">
+<h3>半融合双 kernel 结构</h3>
+<div class="flow">
+<b>K1（Cube-only，PYPTO_fct_kernel_*）</b>：<br>
+&nbsp;&nbsp;HBM(input+weight) → L1(2-deep) → L0A/L0B → Cube 矩阵乘（隐式GEMM conv）→ L0C(fp32累加) → fixpipe → <b>HBM(wsT)</b><br>
+<br>
+<b>K2（Vector-only，PYPTO_fct_tanh2nchw_*）</b>：<br>
+&nbsp;&nbsp;<b>HBM(wsT)</b> → UB → tanh 链（exp→neg→exp→sub→add→div，全程fp32）→ cast → HBM(output)
+</div>
+<p>
+<b>中间结果 wsT 经 HBM 一次往返</b>，但 K1 和 K2 各自内部流水线满流水，互不等待。<br>
+选择半融合的依据：同类算子 fused_conv_sigmoid 实测半融合 4.56x 远优于真融合 2.87x——大 shape 时 per-tile Cube↔Vector 同步开销 > 省掉的 HBM 搬运。
+</p>
+</div>
+
+<div class="card">
+<h3>cannbot 自测中解决的精度问题</h3>
+<ol>
+<li><b>K 循环条件分支精度错误</b>：maxdiff 3.6e-3 → 改为 host 侧堆叠消除条件分支 → maxdiff 降到 2.1e-7</li>
+<li><b>bias 折叠累加器量纲问题</b>：bias 作为 3 个 K-block 加进累加器，|z|≈0 附近 tanh 精度超标 → 把 bias 从 K1 移到 K2 做逐行加法</li>
+</ol>
+</div>
+
+<h2>2. 全部 24 case 性能数据</h2>
+
+<table>
+<tr><th>Case</th><th>Baseline(μs)</th><th>实际(μs)</th><th>Speedup</th><th>趋势</th><th>达标</th></tr>
+<tr><td>case_5</td><td>26.6</td><td>3.4</td><td><b>7.95</b></td><td><span class="bar" style="width:80%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_22</td><td>37.6</td><td>5.3</td><td><b>7.13</b></td><td><span class="bar" style="width:71%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_1</td><td>25.8</td><td>3.8</td><td><b>6.80</b></td><td><span class="bar" style="width:68%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_7</td><td>38.4</td><td>6.1</td><td><b>6.33</b></td><td><span class="bar" style="width:63%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_23</td><td>27.7</td><td>5.3</td><td>5.22</td><td><span class="bar" style="width:52%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_17</td><td>26.6</td><td>5.2</td><td>5.12</td><td><span class="bar" style="width:51%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_19</td><td>26.0</td><td>5.1</td><td>5.10</td><td><span class="bar" style="width:51%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_12</td><td>26.0</td><td>6.0</td><td>4.38</td><td><span class="bar" style="width:44%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_3</td><td>67.8</td><td>15.7</td><td>4.33</td><td><span class="bar" style="width:43%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_10</td><td>36.1</td><td>8.4</td><td>4.29</td><td><span class="bar" style="width:43%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_2</td><td>27.9</td><td>7.0</td><td>3.99</td><td><span class="bar" style="width:40%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_6</td><td>26.9</td><td>6.9</td><td>3.87</td><td><span class="bar" style="width:39%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_9</td><td>26.6</td><td>6.9</td><td>3.86</td><td><span class="bar" style="width:39%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_15</td><td>26.0</td><td>8.3</td><td>3.12</td><td><span class="bar" style="width:31%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_4</td><td>30.6</td><td>9.9</td><td>3.09</td><td><span class="bar" style="width:31%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_14</td><td>59.6</td><td>20.9</td><td>2.85</td><td><span class="bar" style="width:29%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_24</td><td>28.3</td><td>10.0</td><td>2.85</td><td><span class="bar" style="width:29%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_16</td><td>29.2</td><td>10.8</td><td>2.70</td><td><span class="bar" style="width:27%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_13</td><td>25.8</td><td>10.4</td><td>2.47</td><td><span class="bar" style="width:25%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_11</td><td>33.4</td><td>14.8</td><td>2.25</td><td><span class="bar" style="width:23%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_8</td><td>34.6</td><td>15.7</td><td>2.20</td><td><span class="bar" style="width:22%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_21</td><td>30.2</td><td>16.4</td><td>1.84</td><td><span class="bar" style="width:18%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_20</td><td>37.6</td><td>31.2</td><td>1.20</td><td><span class="bar" style="width:12%"></span></td><td class="pass">✅</td></tr>
+<tr><td>case_18</td><td>34.0</td><td>29.8</td><td>1.14</td><td><span class="bar" style="width:11%"></span></td><td class="pass">✅</td></tr>
+</table>
+
+<p>最快：case_5（<b>7.95x</b>）| 最慢：case_18（<b>1.14x</b>）| <b>24/24 全部达标</b></p>
+
+<h2>3. 流程时间线</h2>
+
+<table>
+<tr><th>时间</th><th>阶段</th><th>耗时</th><th>说明</th></tr>
+<tr><td>9/5 17:57</td><td>启动</td><td>—</td><td>--optimize-hint 注入半融合方向</td></tr>
+<tr><td>9/5 18:05</td><td>stage1 分析</td><td>8min</td><td>cannbot 分析 task 需求</td></tr>
+<tr><td>9/5 18:05 → 9/6 00:47</td><td>stage2 首版</td><td><b>6.7h</b></td><td>cannbot 写半融合双 kernel + 自测修精度</td></tr>
+<tr><td>9/6 00:47-00:49</td><td>stage4 编译</td><td>1min</td><td>pip install 成功</td></tr>
+<tr><td>9/6 00:49-00:52</td><td>stage5 精度</td><td>4min</td><td>24/24 全过</td></tr>
+<tr><td>9/6 00:52-01:00</td><td>stage6 性能</td><td>7min</td><td>avg=3.92x，24/24 全达标</td></tr>
+<tr><td>9/6 01:00-01:06</td><td>stage9 融合验证</td><td>6min</td><td>Tech Lead 确认 exit_decision=True</td></tr>
+<tr><td>9/6 01:06</td><td>stage10 报告</td><td>—</td><td>生成 FINAL_REPORT.md</td></tr>
+</table>
+
+<h2>4. 与同类算子对比</h2>
+
+<table>
+<tr><th>算子</th><th>融合方案</th><th>迭代次数</th><th>avg_speedup</th><th>overall_score</th><th>总耗时</th></tr>
+<tr><td><b>FusedConvTanh</b>（本次）</td><td>半融合（K1+K2）</td><td><b>1 轮</b></td><td><b>3.92x</b></td><td><b>90.8</b></td><td>~7.5h</td></tr>
+<tr><td>FusedConvSigmoid（半融合）</td><td>半融合（K1+K2）</td><td>9 轮</td><td>4.56x</td><td>92.4</td><td>~36h</td></tr>
+<tr><td>FusedConvSigmoid（真融合）</td><td>真融合（单 kernel）</td><td>7+8 轮</td><td>2.87x</td><td>87.5</td><td>~40h</td></tr>
+</table>
+
+<div class="success">
+<b>关键经验</b>：半融合方案 + 正确的 optimize-hint 引导 = 一轮迭代达标。<br>
+对比 fused_conv_sigmoid 的真融合方案（14 轮 + 死循环），半融合方案在同类 Conv+激活 融合算子上性能更优、迭代更快。<br>
+<b>optimize-hint 的作用</b>：让 cannbot 直接选对方向，避免在真融合上浪费迭代。
+</div>
+
+<hr>
+<p style="color:#7f8c8d;font-size:12px">
+生成时间：2026-09-06 | PyPTO Pro Workflow v0.2 (feat-geak) |
+仓库：<a href="https://gitcode.com/AI4SE/pypto-pro-workflow">gitcode.com/AI4SE/pypto-pro-workflow</a>
+</p>
+</body>
+</html>

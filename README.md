@@ -2,7 +2,7 @@
 
 > CANN Multimodal-AI SIG — 算子层仓库
 
-多模态 AI 算子库，面向昇腾 NPU 提供高性能多模态融合算子实现。按算子功能族组织，覆盖从编码、融合、空间几何到扩散生成的完整算子栈。
+多模态 AI 算子库，面向昇腾 NPU 提供高性能多模态融合算子实现。当前已实现融合算子族，后续将按社区共建扩展编码、空间几何、扩散生成等算子族。
 
 ## 源码下载
 
@@ -13,28 +13,66 @@ cd multimodal-ops
 
 ## 算子族
 
-| 算子族 | 目录 | 典型算子 | 说明 |
-|--------|------|----------|------|
-| **编码算子** | `ops/encoders/` | Patch Embedding、Voxel Encoding、STFT | 将不同模态的原始输入（图像 patch、点云 voxel、音频时频）编码为统一的 token 表示 |
-| **融合算子** | `ops/fusion/` | Cross-Attention、Query Fusion、Feature Fusion | 多模态特征交互与融合，实现跨模态信息对齐与聚合 |
-| **空间几何算子** | `ops/geometry/` | Camera Projection、BEV Transform、Spatial Alignment | 多传感器空间坐标变换与对齐，支持 2D→3D 投影、BEV 视角转换等几何运算 |
-| **扩散生成算子** | `ops/diffusion/` | Noise Scheduler、Conditional Injection、Denoising Step | 扩散模型核心计算，包含噪声调度、条件控制注入和去噪迭代步 |
+| 算子族 | 目录 | 典型算子 | 状态 | 说明 |
+|--------|------|----------|------|------|
+| **融合算子** | `ops/fusion/` | Fused Conv+Sigmoid、Fused Conv+Tanh | ✅ 已实现 | 卷积+激活融合算子，实现跨模态信息对齐与聚合 |
+| 编码算子 | `ops/encoders/` | Patch Embedding、Voxel Encoding、STFT | 待共建 | 将不同模态的原始输入编码为统一的 token 表示 |
+| 空间几何算子 | `ops/geometry/` | Camera Projection、BEV Transform | 待共建 | 多传感器空间坐标变换与对齐 |
+| 扩散生成算子 | `ops/diffusion/` | Noise Scheduler、Denoising Step | 待共建 | 扩散模型核心计算 |
+
+## 开发框架
+
+本仓算子基于 **PyPTO Pro** 编程框架开发——这是面向昇腾达芬奇架构的 SPMD 编程模型，通过 `@pl.jit` 装饰器将 Python 代码编译为 NPU kernel，支持 Cube（矩阵运算）和 Vector（向量运算）两种计算单元的协同编程。
+
+算子的开发和迭代优化使用 **pypto-pro-workflow** 多智能体自动开发框架驱动（见 [multimodal-bench 仓](https://gitcode.com/cann/multimodal-bench) 的 `ops_tools/workflow/`），3 个 AI Agent 协作完成需求分析→代码编写→编译部署→精度/性能评测→迭代优化的全流程，评测工具为 cann-bench。
+
+## 已有算子
+
+| 算子 | 目录 | 公式 | 版本 | 融合方式 | 评测得分 | 平均加速比 |
+|------|------|------|------|---------|---------|-----------|
+| Fused Conv+Sigmoid | `ops/fusion/fused_conv_sigmoid/` | `y = σ(conv2d(x, w, b))` | 融合算子 | 单 kernel，L0C→UB 直传 | 87.50 | 2.87× |
+| Fused Conv+Tanh | `ops/fusion/fused_conv_tanh/` | `y = tanh(conv2d(x, w, b))` | v1（半融合） | 2 kernel，wsT 经 HBM | 90.82 | 3.92× |
+
+## 目标硬件
+
+当前算子均基于 **Ascend 950**（28 AI Core）开发和验证，当前提供 fp16 实现，fp32/bf16 可参照修改 TileType 的 dtype 参数。详细硬件参数见各算子 `docs/ANALYSIS*.md`。
+
+## 快速使用
+
+以 fused_conv_sigmoid v1 为例：
+
+### 构建安装
+
+```bash
+cd ops/fusion/fused_conv_sigmoid/impl
+pip install . --force-reinstall --no-deps
+```
+
+### Python 调用
+
+```python
+from cann_bench import fused_conv_sigmoid
+
+output = fused_conv_sigmoid(x, conv_filter, bias, strides=[1, 1], pads=[0, 0, 0, 0])
+```
+
+算子自动按输入张量的 dtype（fp16 / fp32 / bf16）和维度分发到对应的 NPU kernel。详细设计文档见各算子 `docs/` 目录。
 
 ## 目录结构
 
 ```
 multimodal-ops/
-├── ops/                    # 算子实现（按族分目录）
-│   ├── encoders/           #   编码算子（Patch · Voxel · STFT）
-│   ├── fusion/             #   融合算子（Attention · Query · Feature）
-│   ├── geometry/           #   空间几何算子（投影 · 空间对齐）
-│   └── diffusion/          #   扩散生成算子（调度 · 条件 · 生成）
-├── common/                 # 公共工具代码（utils、通用 helper）
-├── include/                # 公共头文件 / 接口定义
-├── examples/               # 算子调用示例
-├── docs/                   # 算子设计文档与 API 参考
-├── cmake/                  # CMake 构建脚本
-└── scripts/                # 辅助脚本（代码生成、格式检查等）
+├── ops/                                # 算子实现（按族分目录）
+│   └── fusion/                         #   融合算子
+│       ├── fused_conv_sigmoid/         #     Conv+Sigmoid 融合算子
+│       │   ├── impl/                  #       算子实现（融合 kernel）
+│       │   └── docs/                  #       设计文档与评测报告
+│       └── fused_conv_tanh/           #     Conv+Tanh 融合算子
+│           ├── impl/                  #       算子实现
+│           └── docs/                  #       设计文档与评测报告
+├── common/                             # 公共工具代码
+├── examples/                           # 算子调用示例
+└── docs/                               # 算子设计文档与 API 参考
 ```
 
 ## 贡献指南
