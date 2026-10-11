@@ -28,18 +28,32 @@ cd multimodal-ops
 
 ## 已有算子
 
-| 算子 | 目录 | 公式 | 版本 | 融合方式 | 评测得分 | 平均加速比 |
-|------|------|------|------|---------|---------|-----------|
-| Fused Conv+Sigmoid | `ops/fusion/fused_conv_sigmoid/` | `y = σ(conv2d(x, w, b))` | 融合算子 | 单 kernel，L0C→UB 直传 | 87.50 | 2.87× |
-| Fused Conv+Tanh | `ops/fusion/fused_conv_tanh/` | `y = tanh(conv2d(x, w, b))` | v1（半融合） | 2 kernel，wsT 经 HBM | 90.82 | 3.92× |
+| 算子 | 目录 | 公式 | 融合方式 | 评测得分 | 平均加速比 |
+|------|------|------|---------|---------|-----------|
+| Fused Conv+Sigmoid | `ops/fusion/fused_conv_sigmoid/` | `y = σ(conv2d(x, w, b))` | Cube-Vector 片上直传融合（L0C→UB） | 87.50 | 2.87× |
+| Fused Conv+Tanh | `ops/fusion/fused_conv_tanh/` | `y = tanh(conv2d(x, w, b))` | 双 Kernel 流水融合（K1 Cube + K2 Vector） | 90.82 | 3.92× |
 
 ## 目标硬件
 
-当前算子均基于 **Ascend 950**（28 AI Core）开发和验证，当前提供 fp16 实现，fp32/bf16 可参照修改 TileType 的 dtype 参数。详细硬件参数见各算子 `docs/ANALYSIS*.md`。
+当前算子均基于 **Ascend 950**（28 AI Core）开发和验证，当前提供 fp16 实现。详细硬件参数见各算子 `docs/ANALYSIS*.md`。
+
+## 版本配套
+
+| 项目 | 版本 |
+|------|------|
+| 产品型号 | Atlas 800I A2 |
+| NPU 芯片 | Ascend 950 |
+| CANN 版本 | 9.1.0 |
+| 驱动版本 | 25.7.rc1 |
+| 操作系统 | Ubuntu 24.04.3 LTS (x86_64) |
+| Python | >= 3.10（验证版本 3.12.3） |
+| PyTorch | >= 2.1（验证版本 2.7.1） |
+| torch_npu | 与 PyTorch 版本匹配（验证版本 2.7.1.post8） |
+| PyPTO | 0.2.1（CANN 内置） |
 
 ## 快速使用
 
-以 fused_conv_sigmoid v1 为例：
+以 fused_conv_sigmoid 为例：
 
 ### 构建安装
 
@@ -56,7 +70,7 @@ from cann_bench import fused_conv_sigmoid
 output = fused_conv_sigmoid(x, conv_filter, bias, strides=[1, 1], pads=[0, 0, 0, 0])
 ```
 
-算子自动按输入张量的 dtype（fp16 / fp32 / bf16）和维度分发到对应的 NPU kernel。详细设计文档见各算子 `docs/` 目录。
+算子接收 fp16 输入张量，自动分发到对应的 NPU kernel。详细设计文档见各算子 `docs/` 目录。
 
 ## 目录结构
 
@@ -70,9 +84,9 @@ multimodal-ops/
 │       └── fused_conv_tanh/           #     Conv+Tanh 融合算子
 │           ├── impl/                  #       算子实现
 │           └── docs/                  #       设计文档与评测报告
-├── common/                             # 公共工具代码
-├── examples/                           # 算子调用示例
-└── docs/                               # 算子设计文档与 API 参考
+├── common/                             # 公共工具代码（待共建）
+├── examples/                           # 算子调用示例（待共建）
+└── docs/                               # 算子设计文档与 API 参考（待共建）
 ```
 
 ## 贡献指南
