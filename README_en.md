@@ -40,7 +40,7 @@ All operators are developed and validated on **Ascend 950** (28 AI Cores), curre
 
 | Item | Version |
 |------|---------|
-| Product | Atlas 800I A2 |
+| Product | Ascend950PR |
 | NPU Chip | Ascend 950 |
 | CANN | 9.1.0 |
 | Driver | 25.7.rc1 |

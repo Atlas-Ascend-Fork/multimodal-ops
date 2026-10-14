@@ -41,7 +41,7 @@ cd multimodal-ops
 
 | 项目 | 版本 |
 |------|------|
-| 产品型号 | Atlas 800I A2 |
+| 产品型号 | Ascend950PR |
 | NPU 芯片 | Ascend 950 |
 | CANN 版本 | 9.1.0 |
 | 驱动版本 | 25.7.rc1 |
