@@ -24,7 +24,7 @@ cd multimodal-ops
 
 本仓算子基于 **PyPTO Pro** 编程框架开发——这是面向昇腾达芬奇架构的 SPMD 编程模型，通过 `@pl.jit` 装饰器将 Python 代码编译为 NPU kernel，支持 Cube（矩阵运算）和 Vector（向量运算）两种计算单元的协同编程。
 
-算子的开发和迭代优化使用 **pypto-pro-workflow** 多智能体自动开发框架驱动（见 [multimodal-bench 仓](https://gitcode.com/cann/multimodal-bench) 的 `ops_tools/workflow/`），3 个 AI Agent 协作完成需求分析→代码编写→编译部署→精度/性能评测→迭代优化的全流程，评测工具为 cann-bench。
+算子的开发和迭代优化使用 **pypto-pro-workflow** 多智能体自动开发框架驱动（见 [multimodal-benchmark 仓](https://gitcode.com/cann/multimodal-benchmark) 的 `ops_tools/workflow/`），3 个 AI Agent 协作完成需求分析→代码编写→编译部署→精度/性能评测→迭代优化的全流程，评测工具为 cann-bench。
 
 ## 已有算子
 

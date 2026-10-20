@@ -24,7 +24,7 @@ cd multimodal-ops
 
 Operators are developed using the **PyPTO Pro** programming framework — an SPMD programming model for Ascend DaVinci architecture. It compiles Python code into NPU kernels via the `@pl.jit` decorator, supporting both Cube (matrix) and Vector (vector) compute units.
 
-Operator development and iterative optimization are driven by the **pypto-pro-workflow** multi-agent framework (see `ops_tools/workflow/` in the [multimodal-bench repo](https://gitcode.com/cann/multimodal-bench)).
+Operator development and iterative optimization are driven by the **pypto-pro-workflow** multi-agent framework (see `ops_tools/workflow/` in the [multimodal-benchmark repo](https://gitcode.com/cann/multimodal-benchmark)).
 
 ## Available Operators
 
