@@ -15,7 +15,7 @@ cd multimodal-ops
 
 | Family | Directory | Typical Operators | Status | Description |
 |--------|-----------|-------------------|--------|-------------|
-| **Fusion** | `ops/fusion/` | Fused Conv+Sigmoid, Fused Conv+Tanh, Fused MulAdd+LayerNorm+MulAdd, Fused RMSNorm+Pos+QKV+QKNorm, Fused PatchConcat+LayerNorm | Implemented | Conv+activation, normalization, attention pre-processing and patch-aggregation fused operators for cross-modal alignment; organized into `pypto-pro/` and `triton-ascend/` subdirectories by framework |
+| **Fusion** | `ops/fusion/` | Fused Conv+Sigmoid, Fused Conv+Tanh, Fused MulAdd+LayerNorm+MulAdd, Fused RMSNorm+Pos+QKV+QKNorm, Fused PatchConcat+LayerNorm, Fused RollWindowPartition, Fused GroupNorm+MulAdd+SiLU | Implemented | Conv+activation, normalization, attention pre-processing, patch-aggregation and window-partition fused operators for cross-modal alignment; organized into `pypto-pro/` and `triton-ascend/` subdirectories by framework |
 | Encoding | `ops/encoders/` | Patch Embedding, Voxel Encoding, STFT | Planned | Encode multi-modal raw inputs into unified token representations |
 | Spatial Geometry | `ops/geometry/` | Camera Projection, BEV Transform | Planned | Multi-sensor spatial coordinate transforms |
 | Diffusion | `ops/diffusion/` | Noise Scheduler, Denoising Step | Planned | Core diffusion model computations |
@@ -35,6 +35,8 @@ Operator development and iterative optimization are driven by the **pypto-pro-wo
 | Fused MulAdd+LayerNorm+MulAdd | `ops/fusion/triton-ascend/fused_mul_add_layernorm_mul_add/` | `y = LN(x + gate·attn_out) · (1+scale) + shift` | Triton-Ascend single-kernel fusion (residual kept on-chip, zero L2 re-read) | 90.32 | 3.58× |
 | Fused RMSNorm+Pos+QKV+QKNorm | `ops/fusion/triton-ascend/fused_rmsnorm_pos_qkv_qknorm/` | `(q,k,v) = QKVN(RMSN(x)+pos @ Wqkv)` with q/k RMSNorm | Triton-Ascend kernel-fission pipeline chain (4 kernels, SPMD) | 103.32 | 32.38× |
 | Fused PatchConcat+LayerNorm | `ops/fusion/triton-ascend/fused_patch_concat_layernorm/` | `y = LN(concat2x2(x))` (Swin v1 patch merging stage) | Triton-Ascend single-kernel fusion (2×2 concat + norm on-chip) | 83.29 | 1.97× |
+| Fused RollWindowPartition | `ops/fusion/triton-ascend/fused_roll_window_partition/` | `windows[n,u,v,c] = x[b,(iM+u+s)%H,(jM+v+s)%W,c]` | Triton-Ascend row/window-tile dual-path bit-exact copy (roll + partition in one pass) | 100.17 | 33.08× |
+| Fused GroupNorm+MulAdd+SiLU | `ops/fusion/triton-ascend/fused_groupnorm_mul_add_silu/` | `y = SiLU(GN(x)·(1+scale)+shift)` | Triton-Ascend three-path fusion (resident tile / stats+apply split / streaming) | 87.05 | 2.85× |
 
 ## Target Hardware
 
@@ -90,7 +92,9 @@ multimodal-ops/
 │       └── triton-ascend/             #     Triton-Ascend implementations
 │           ├── fused_mul_add_layernorm_mul_add/  # MulAdd+LayerNorm+MulAdd
 │           ├── fused_rmsnorm_pos_qkv_qknorm/     # RMSNorm+Pos+QKV+QKNorm
-│           └── fused_patch_concat_layernorm/     # PatchConcat+LayerNorm
+│           ├── fused_patch_concat_layernorm/     # PatchConcat+LayerNorm
+│           ├── fused_roll_window_partition/      # RollWindowPartition
+│           └── fused_groupnorm_mul_add_silu/     # GroupNorm+MulAdd+SiLU
 ├── common/                             # Shared utility code (planned)
 ├── examples/                           # Operator usage examples (planned)
 └── docs/                               # Design docs & API reference (planned)
