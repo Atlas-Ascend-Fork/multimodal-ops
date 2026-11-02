@@ -15,7 +15,7 @@ cd multimodal-ops
 
 | Family | Directory | Typical Operators | Status | Description |
 |--------|-----------|-------------------|--------|-------------|
-| **Fusion** | `ops/fusion/` | Fused Conv+Sigmoid, Fused Conv+Tanh, Fused MulAdd+LayerNorm+MulAdd | Implemented | Conv+activation and normalization fused operators for cross-modal alignment; organized into `pypto-pro/` and `triton-ascend/` subdirectories by framework |
+| **Fusion** | `ops/fusion/` | Fused Conv+Sigmoid, Fused Conv+Tanh, Fused MulAdd+LayerNorm+MulAdd, Fused RMSNorm+Pos+QKV+QKNorm, Fused PatchConcat+LayerNorm | Implemented | Conv+activation, normalization, attention pre-processing and patch-aggregation fused operators for cross-modal alignment; organized into `pypto-pro/` and `triton-ascend/` subdirectories by framework |
 | Encoding | `ops/encoders/` | Patch Embedding, Voxel Encoding, STFT | Planned | Encode multi-modal raw inputs into unified token representations |
 | Spatial Geometry | `ops/geometry/` | Camera Projection, BEV Transform | Planned | Multi-sensor spatial coordinate transforms |
 | Diffusion | `ops/diffusion/` | Noise Scheduler, Denoising Step | Planned | Core diffusion model computations |
@@ -33,10 +33,12 @@ Operator development and iterative optimization are driven by the **pypto-pro-wo
 | Fused Conv+Sigmoid | `ops/fusion/pypto-pro/fused_conv_sigmoid/` | `y = σ(conv2d(x, w, b))` | Cube-Vector on-chip direct transfer (L0C→UB) | 87.50 | 2.87× |
 | Fused Conv+Tanh | `ops/fusion/pypto-pro/fused_conv_tanh/` | `y = tanh(conv2d(x, w, b))` | Dual-kernel pipeline (K1 Cube + K2 Vector) | 90.82 | 3.92× |
 | Fused MulAdd+LayerNorm+MulAdd | `ops/fusion/triton-ascend/fused_mul_add_layernorm_mul_add/` | `y = LN(x + gate·attn_out) · (1+scale) + shift` | Triton-Ascend single-kernel fusion (residual kept on-chip, zero L2 re-read) | 90.32 | 3.58× |
+| Fused RMSNorm+Pos+QKV+QKNorm | `ops/fusion/triton-ascend/fused_rmsnorm_pos_qkv_qknorm/` | `(q,k,v) = QKVN(RMSN(x)+pos @ Wqkv)` with q/k RMSNorm | Triton-Ascend kernel-fission pipeline chain (4 kernels, SPMD) | 103.32 | 32.38× |
+| Fused PatchConcat+LayerNorm | `ops/fusion/triton-ascend/fused_patch_concat_layernorm/` | `y = LN(concat2x2(x))` (Swin v1 patch merging stage) | Triton-Ascend single-kernel fusion (2×2 concat + norm on-chip) | 83.29 | 1.97× |
 
 ## Target Hardware
 
-All operators are developed and validated on **Ascend 950** (28 AI Cores), currently providing fp16 implementations. See `docs/ANALYSIS*.md` in each operator directory for detailed hardware parameters.
+All operators are developed and validated on **Ascend 950** (28 AI Cores, PyPTO Pro implementations) and **Ascend 910B3** (20 AI Cores, Triton-Ascend implementations), providing fp16/bf16 implementations. See `docs/ANALYSIS*.md` in each operator directory for detailed hardware parameters.
 ## Version Compatibility
 
 | Item | Version |
@@ -86,7 +88,9 @@ multimodal-ops/
 │       │       ├── impl/              #         Implementation
 │       │       └── docs/              #         Design docs & evaluation reports
 │       └── triton-ascend/             #     Triton-Ascend implementations
-│           └── fused_mul_add_layernorm_mul_add/  # MulAdd+LayerNorm+MulAdd
+│           ├── fused_mul_add_layernorm_mul_add/  # MulAdd+LayerNorm+MulAdd
+│           ├── fused_rmsnorm_pos_qkv_qknorm/     # RMSNorm+Pos+QKV+QKNorm
+│           └── fused_patch_concat_layernorm/     # PatchConcat+LayerNorm
 ├── common/                             # Shared utility code (planned)
 ├── examples/                           # Operator usage examples (planned)
 └── docs/                               # Design docs & API reference (planned)

@@ -15,7 +15,7 @@ cd multimodal-ops
 
 | 算子族 | 目录 | 典型算子 | 状态 | 说明 |
 |--------|------|----------|------|------|
-| **融合算子** | `ops/fusion/` | Fused Conv+Sigmoid、Fused Conv+Tanh、Fused MulAdd+LayerNorm+MulAdd | ✅ 已实现 | 卷积+激活、归一化类融合算子，实现跨模态信息对齐与聚合；按开发框架分 `pypto-pro/` 与 `triton-ascend/` 两个子目录 |
+| **融合算子** | `ops/fusion/` | Fused Conv+Sigmoid、Fused Conv+Tanh、Fused MulAdd+LayerNorm+MulAdd、Fused RMSNorm+Pos+QKV+QKNorm、Fused PatchConcat+LayerNorm | ✅ 已实现 | 卷积+激活、归一化类、注意力前处理、Patch 聚合融合算子，实现跨模态信息对齐与聚合；按开发框架分 `pypto-pro/` 与 `triton-ascend/` 两个子目录 |
 | 编码算子 | `ops/encoders/` | Patch Embedding、Voxel Encoding、STFT | 待共建 | 将不同模态的原始输入编码为统一的 token 表示 |
 | 空间几何算子 | `ops/geometry/` | Camera Projection、BEV Transform | 待共建 | 多传感器空间坐标变换与对齐 |
 | 扩散生成算子 | `ops/diffusion/` | Noise Scheduler、Denoising Step | 待共建 | 扩散模型核心计算 |
@@ -33,10 +33,12 @@ cd multimodal-ops
 | Fused Conv+Sigmoid | `ops/fusion/pypto-pro/fused_conv_sigmoid/` | `y = σ(conv2d(x, w, b))` | Cube-Vector 片上直传融合（L0C→UB） | 87.50 | 2.87× |
 | Fused Conv+Tanh | `ops/fusion/pypto-pro/fused_conv_tanh/` | `y = tanh(conv2d(x, w, b))` | 双 Kernel 流水融合（K1 Cube + K2 Vector） | 90.82 | 3.92× |
 | Fused MulAdd+LayerNorm+MulAdd | `ops/fusion/triton-ascend/fused_mul_add_layernorm_mul_add/` | `y = LN(x + gate·attn_out) · (1+scale) + shift` | Triton-Ascend 单 kernel 融合（residual 片上驻留，零 L2 重读） | 90.32 | 3.58× |
+| Fused RMSNorm+Pos+QKV+QKNorm | `ops/fusion/triton-ascend/fused_rmsnorm_pos_qkv_qknorm/` | `(q,k,v) = QKVN(RMSN(x)+pos @ Wqkv)`，q/k 再做 RMSNorm | Triton-Ascend kernel fission 流水链（4 kernel，SPMD） | 103.32 | 32.38× |
+| Fused PatchConcat+LayerNorm | `ops/fusion/triton-ascend/fused_patch_concat_layernorm/` | `y = LN(concat2x2(x))`（Swin v1 patch merging 前级） | Triton-Ascend 单 kernel 融合（2×2 拼接+归一化片上完成） | 83.29 | 1.97× |
 
 ## 目标硬件
 
-当前算子均基于 **Ascend 950**（28 AI Core）开发和验证，当前提供 fp16 实现。详细硬件参数见各算子 `docs/ANALYSIS*.md`。
+当前算子基于 **Ascend 950**（28 AI Core，PyPTO Pro 实现）与 **Ascend 910B3**（20 AI Core，Triton-Ascend 实现）开发和验证，提供 fp16/bf16 实现。详细硬件参数见各算子 `docs/ANALYSIS*.md`。
 
 ## 版本配套
 
@@ -87,7 +89,9 @@ multimodal-ops/
 │       │       ├── impl/              #         算子实现
 │       │       └── docs/              #         设计文档与评测报告
 │       └── triton-ascend/             #     Triton-Ascend 实现
-│           └── fused_mul_add_layernorm_mul_add/  # MulAdd+LayerNorm+MulAdd 融合算子
+│           ├── fused_mul_add_layernorm_mul_add/  # MulAdd+LayerNorm+MulAdd 融合算子
+│           ├── fused_rmsnorm_pos_qkv_qknorm/     # RMSNorm+Pos+QKV+QKNorm 融合算子
+│           └── fused_patch_concat_layernorm/     # PatchConcat+LayerNorm 融合算子
 ├── common/                             # 公共工具代码（待共建）
 ├── examples/                           # 算子调用示例（待共建）
 └── docs/                               # 算子设计文档与 API 参考（待共建）
