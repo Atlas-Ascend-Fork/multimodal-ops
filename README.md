@@ -15,7 +15,7 @@ cd multimodal-ops
 
 | 算子族 | 目录 | 典型算子 | 状态 | 说明 |
 |--------|------|----------|------|------|
-| **融合算子** | `ops/fusion/` | Fused Conv+Sigmoid、Fused Conv+Tanh | ✅ 已实现 | 卷积+激活融合算子，实现跨模态信息对齐与聚合 |
+| **融合算子** | `ops/fusion/` | Fused Conv+Sigmoid、Fused Conv+Tanh、Fused MulAdd+LayerNorm+MulAdd | ✅ 已实现 | 卷积+激活、归一化类融合算子，实现跨模态信息对齐与聚合；按开发框架分 `pypto-pro/` 与 `triton-ascend/` 两个子目录 |
 | 编码算子 | `ops/encoders/` | Patch Embedding、Voxel Encoding、STFT | 待共建 | 将不同模态的原始输入编码为统一的 token 表示 |
 | 空间几何算子 | `ops/geometry/` | Camera Projection、BEV Transform | 待共建 | 多传感器空间坐标变换与对齐 |
 | 扩散生成算子 | `ops/diffusion/` | Noise Scheduler、Denoising Step | 待共建 | 扩散模型核心计算 |
@@ -30,9 +30,9 @@ cd multimodal-ops
 
 | 算子 | 目录 | 公式 | 融合方式 | 评测得分 | 平均加速比 |
 |------|------|------|---------|---------|-----------|
-| Fused Conv+Sigmoid | `ops/fusion/fused_conv_sigmoid/` | `y = σ(conv2d(x, w, b))` | Cube-Vector 片上直传融合（L0C→UB） | 87.50 | 2.87× |
-| Fused Conv+Tanh | `ops/fusion/fused_conv_tanh/` | `y = tanh(conv2d(x, w, b))` | 双 Kernel 流水融合（K1 Cube + K2 Vector） | 90.82 | 3.92× |
-| Fused MulAdd+LayerNorm+MulAdd | `ops/fusion/fused_mul_add_layernorm_mul_add/` | `y = LN(x + gate·attn_out) · (1+scale) + shift` | Triton-Ascend 单 kernel 融合（residual 片上驻留，零 L2 重读） | 90.32 | 3.58× |
+| Fused Conv+Sigmoid | `ops/fusion/pypto-pro/fused_conv_sigmoid/` | `y = σ(conv2d(x, w, b))` | Cube-Vector 片上直传融合（L0C→UB） | 87.50 | 2.87× |
+| Fused Conv+Tanh | `ops/fusion/pypto-pro/fused_conv_tanh/` | `y = tanh(conv2d(x, w, b))` | 双 Kernel 流水融合（K1 Cube + K2 Vector） | 90.82 | 3.92× |
+| Fused MulAdd+LayerNorm+MulAdd | `ops/fusion/triton-ascend/fused_mul_add_layernorm_mul_add/` | `y = LN(x + gate·attn_out) · (1+scale) + shift` | Triton-Ascend 单 kernel 融合（residual 片上驻留，零 L2 重读） | 90.32 | 3.58× |
 
 ## 目标硬件
 
@@ -59,7 +59,7 @@ cd multimodal-ops
 ### 构建安装
 
 ```bash
-cd ops/fusion/fused_conv_sigmoid/impl
+cd ops/fusion/pypto-pro/fused_conv_sigmoid/impl
 pip install . --force-reinstall --no-deps
 ```
 
@@ -78,13 +78,16 @@ output = fused_conv_sigmoid(x, conv_filter, bias, strides=[1, 1], pads=[0, 0, 0,
 ```
 multimodal-ops/
 ├── ops/                                # 算子实现（按族分目录）
-│   └── fusion/                         #   融合算子
-│       ├── fused_conv_sigmoid/         #     Conv+Sigmoid 融合算子
-│       │   ├── impl/                  #       算子实现（融合 kernel）
-│       │   └── docs/                  #       设计文档与评测报告
-│       └── fused_conv_tanh/           #     Conv+Tanh 融合算子
-│           ├── impl/                  #       算子实现
-│           └── docs/                  #       设计文档与评测报告
+│   └── fusion/                         #   融合算子（按开发框架分子目录）
+│       ├── pypto-pro/                  #     PyPTO Pro 实现
+│       │   ├── fused_conv_sigmoid/    #       Conv+Sigmoid 融合算子
+│       │   │   ├── impl/              #         算子实现（融合 kernel）
+│       │   │   └── docs/              #         设计文档与评测报告
+│       │   └── fused_conv_tanh/       #       Conv+Tanh 融合算子
+│       │       ├── impl/              #         算子实现
+│       │       └── docs/              #         设计文档与评测报告
+│       └── triton-ascend/             #     Triton-Ascend 实现
+│           └── fused_mul_add_layernorm_mul_add/  # MulAdd+LayerNorm+MulAdd 融合算子
 ├── common/                             # 公共工具代码（待共建）
 ├── examples/                           # 算子调用示例（待共建）
 └── docs/                               # 算子设计文档与 API 参考（待共建）

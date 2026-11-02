@@ -15,7 +15,7 @@ cd multimodal-ops
 
 | Family | Directory | Typical Operators | Status | Description |
 |--------|-----------|-------------------|--------|-------------|
-| **Fusion** | `ops/fusion/` | Fused Conv+Sigmoid, Fused Conv+Tanh | Implemented | Conv+activation fused operators for cross-modal alignment |
+| **Fusion** | `ops/fusion/` | Fused Conv+Sigmoid, Fused Conv+Tanh, Fused MulAdd+LayerNorm+MulAdd | Implemented | Conv+activation and normalization fused operators for cross-modal alignment; organized into `pypto-pro/` and `triton-ascend/` subdirectories by framework |
 | Encoding | `ops/encoders/` | Patch Embedding, Voxel Encoding, STFT | Planned | Encode multi-modal raw inputs into unified token representations |
 | Spatial Geometry | `ops/geometry/` | Camera Projection, BEV Transform | Planned | Multi-sensor spatial coordinate transforms |
 | Diffusion | `ops/diffusion/` | Noise Scheduler, Denoising Step | Planned | Core diffusion model computations |
@@ -30,8 +30,9 @@ Operator development and iterative optimization are driven by the **pypto-pro-wo
 
 | Operator | Directory | Formula | Fusion Method | Score | Avg Speedup |
 |----------|-----------|---------|---------------|-------|-------------|
-| Fused Conv+Sigmoid | `ops/fusion/fused_conv_sigmoid/` | `y = σ(conv2d(x, w, b))` | Cube-Vector on-chip direct transfer (L0C→UB) | 87.50 | 2.87× |
-| Fused Conv+Tanh | `ops/fusion/fused_conv_tanh/` | `y = tanh(conv2d(x, w, b))` | Dual-kernel pipeline (K1 Cube + K2 Vector) | 90.82 | 3.92× |
+| Fused Conv+Sigmoid | `ops/fusion/pypto-pro/fused_conv_sigmoid/` | `y = σ(conv2d(x, w, b))` | Cube-Vector on-chip direct transfer (L0C→UB) | 87.50 | 2.87× |
+| Fused Conv+Tanh | `ops/fusion/pypto-pro/fused_conv_tanh/` | `y = tanh(conv2d(x, w, b))` | Dual-kernel pipeline (K1 Cube + K2 Vector) | 90.82 | 3.92× |
+| Fused MulAdd+LayerNorm+MulAdd | `ops/fusion/triton-ascend/fused_mul_add_layernorm_mul_add/` | `y = LN(x + gate·attn_out) · (1+scale) + shift` | Triton-Ascend single-kernel fusion (residual kept on-chip, zero L2 re-read) | 90.32 | 3.58× |
 
 ## Target Hardware
 
@@ -57,7 +58,7 @@ Example with fused_conv_sigmoid:
 ### Build & Install
 
 ```bash
-cd ops/fusion/fused_conv_sigmoid/impl
+cd ops/fusion/pypto-pro/fused_conv_sigmoid/impl
 pip install . --force-reinstall --no-deps
 ```
 
@@ -76,13 +77,16 @@ The operator accepts fp16 input tensors and dispatches to the appropriate NPU ke
 ```
 multimodal-ops/
 ├── ops/                                # Operator implementations (by family)
-│   └── fusion/                         #   Fusion operators
-│       ├── fused_conv_sigmoid/         #     Conv+Sigmoid
-│       │   ├── impl/                  #       Implementation (fused kernel)
-│       │   └── docs/                  #       Design docs & evaluation reports
-│       └── fused_conv_tanh/           #     Conv+Tanh
-│           ├── impl/                  #       Implementation
-│           └── docs/                  #       Design docs & evaluation reports
+│   └── fusion/                         #   Fusion operators (by framework)
+│       ├── pypto-pro/                  #     PyPTO Pro implementations
+│       │   ├── fused_conv_sigmoid/    #       Conv+Sigmoid
+│       │   │   ├── impl/              #         Implementation (fused kernel)
+│       │   │   └── docs/              #         Design docs & evaluation reports
+│       │   └── fused_conv_tanh/       #       Conv+Tanh
+│       │       ├── impl/              #         Implementation
+│       │       └── docs/              #         Design docs & evaluation reports
+│       └── triton-ascend/             #     Triton-Ascend implementations
+│           └── fused_mul_add_layernorm_mul_add/  # MulAdd+LayerNorm+MulAdd
 ├── common/                             # Shared utility code (planned)
 ├── examples/                           # Operator usage examples (planned)
 └── docs/                               # Design docs & API reference (planned)
