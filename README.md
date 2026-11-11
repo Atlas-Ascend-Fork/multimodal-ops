@@ -119,4 +119,4 @@ multimodal-ops/
 
 ## 问题反馈
 
-如有问题或建议，请通过 [Issue](../../issues) 提交反馈。
+如有问题或建议，请通过 [Issue](https://gitcode.com/cann/multimodal-ops/issues) 提交反馈。
